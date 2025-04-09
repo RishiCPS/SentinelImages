@@ -1,0 +1,751 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "ccd5adcd-8d59-4cfe-99ec-98075de2e253",
+            "version": "KqlParameterItem/1.0",
+            "name": "DefaultSubscription_Internal",
+            "type": 1,
+            "isRequired": true,
+            "query": "where type =~ 'microsoft.operationalinsights/workspaces'\r\n| take 1\r\n| project subscriptionId",
+            "crossComponentResources": [
+              "value::selected"
+            ],
+            "queryType": 1,
+            "resourceType": "microsoft.resourcegraph/resources"
+          },
+          {
+            "id": "1ca69445-60fc-4806-b43d-ac7e6aad630a",
+            "version": "KqlParameterItem/1.0",
+            "name": "Subscription",
+            "type": 6,
+            "query": "summarize by subscriptionId\r\n| project value = strcat(\"/subscriptions/\", subscriptionId), label = subscriptionId, selected = iff(subscriptionId =~ '{DefaultSubscription_Internal}', true, false)\r\n",
+            "crossComponentResources": [
+              "value::selected"
+            ],
+            "typeSettings": {
+              "additionalResourceOptions": [],
+              "showDefault": false
+            },
+            "queryType": 1,
+            "resourceType": "microsoft.resourcegraph/resources",
+            "label": "☁️ Subscription"
+          },
+          {
+            "id": "e94aafa3-c5d9-4523-89f0-4e87aa754511",
+            "version": "KqlParameterItem/1.0",
+            "name": "Workspace",
+            "label": "🗂️ Workspace",
+            "type": 5,
+            "isRequired": true,
+            "query": "resources\n| where type =~ 'microsoft.operationalinsights/workspaces' \n//| where subscriptionId == '{Subscription:id}'\n| project id",
+            "crossComponentResources": [
+              "{Subscription}"
+            ],
+            "value": "/subscriptions/b4a10294-e9a4-47e3-8dab-94cc23dd16d7/resourceGroups/Sentinel-PROD-RG/providers/Microsoft.OperationalInsights/workspaces/BDOSecure-LAW",
+            "typeSettings": {
+              "resourceTypeFilter": {
+                "microsoft.operationalinsights/workspaces": true
+              },
+              "additionalResourceOptions": []
+            },
+            "queryType": 1,
+            "resourceType": "microsoft.resourcegraph/resources"
+          },
+          {
+            "id": "eafaa0ec-7c3a-4ee5-babe-9850080c909d",
+            "version": "KqlParameterItem/1.0",
+            "name": "resourceGroup",
+            "type": 1,
+            "query": "resources\r\n| where type =~ 'microsoft.operationalinsights/workspaces'\r\n| where id == \"{Workspace}\"\r\n| project resourceGroup",
+            "crossComponentResources": [
+              "value::selected"
+            ],
+            "queryType": 1,
+            "resourceType": "microsoft.resourcegraph/resources"
+          },
+          {
+            "id": "c4b69c01-2263-4ada-8d9c-43433b739ff3",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "value": {
+              "durationMs": 7776000000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 300000
+                },
+                {
+                  "durationMs": 900000
+                },
+                {
+                  "durationMs": 1800000
+                },
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 172800000
+                },
+                {
+                  "durationMs": 259200000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 1209600000
+                },
+                {
+                  "durationMs": 2419200000
+                },
+                {
+                  "durationMs": 2592000000
+                },
+                {
+                  "durationMs": 5184000000
+                },
+                {
+                  "durationMs": 7776000000
+                }
+              ],
+              "allowCustom": true
+            },
+            "label": "⏱️ Time Range"
+          }
+        ],
+        "style": "above",
+        "queryType": 1,
+        "resourceType": "microsoft.resourcegraph/resources"
+      },
+      "name": "parameters - 1"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "📌 Step 1 : Threat Intel Migration Guidance",
+        "expandable": true,
+        "items": [
+          {
+            "type": 1,
+            "content": {
+              "json": "You do **not** need to rush into query or rule updates unless the new tables (`ThreatIntelIndicators` or `ThreatIntelObjects`) are actively receiving data.\r\n\r\n> 📈 **Action Tip:**  \r\nIf you observe a **clear increase** (spike) in ingestion for the new tables in the above chart, it indicates that enrichment or IOC content has shifted.  \r\nThat’s the ideal time to start updating your analytic rules and workbooks.\r\n\r\nUntil then, your legacy rules will continue working during the dual-ingestion period."
+            },
+            "name": "text - 0"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let Now = now();\r\n(range TimeGenerated from ago(30d) to Now - 1d step 1d\r\n| extend Count = 0\r\n| union isfuzzy=true\r\n    (ThreatIntelligenceIndicator\r\n    | summarize Count = count() by bin_at(TimeGenerated, 1d, Now))\r\n| summarize Count = max(Count) by bin_at(TimeGenerated, 1d, Now)\r\n| sort by TimeGenerated\r\n| project\r\n    Value = iff(isnull(Count), 0, Count),\r\n    Time = TimeGenerated,\r\n    Legend = \"ThreatIntelligenceIndicator\")\r\n| union isfuzzy=true (\r\n    range TimeGenerated from ago(30d) to Now - 1d step 1d\r\n    | extend Count = 0\r\n    | union isfuzzy=true (\r\n        ThreatIntelIndicators\r\n        | summarize Count = count() by bin_at(TimeGenerated, 1d, Now))\r\n    | summarize Count = max(Count) by bin_at(TimeGenerated, 1d, Now)\r\n    | sort by TimeGenerated\r\n    | project\r\n        Value = iff(isnull(Count), 0, Count),\r\n        Time = TimeGenerated,\r\n        Legend = \"ThreatIntelIndicators\"\r\n)\r\n| union isfuzzy=true (\r\n    range TimeGenerated from ago(30d) to Now - 1d step 1d\r\n    | extend Count = 0\r\n    | union isfuzzy=true (\r\n        ThreatIntelObjects\r\n        | summarize Count = count() by bin_at(TimeGenerated, 1d, Now))\r\n    | summarize Count = max(Count) by bin_at(TimeGenerated, 1d, Now)\r\n    | sort by TimeGenerated\r\n    | project\r\n        Value = iff(isnull(Count), 0, Count),\r\n        Time = TimeGenerated,\r\n        Legend = \"ThreatIntelObjects\"\r\n)\r\n| render timechart\r\n",
+              "size": 0,
+              "showAnalytics": true,
+              "timeContextFromParameter": "TimeRange",
+              "showRefreshButton": true,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "linechart"
+            },
+            "name": "query - 1"
+          }
+        ]
+      },
+      "name": "group - 4"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "\r\n### 📌 Step 2 : Threat Intelligence Schema Migration – Overview\r\n\r\n**Why this change is happening:**  \r\nMicrosoft has introduced a new threat intelligence schema in Sentinel to improve detection fidelity and enable richer context. This update replaces the legacy `ThreatIntelligenceIndicator` table with two new ones: `ThreatIntelIndicators` and `ThreatIntelObjects`.\r\n\r\n**What this means for Trustwave ISAs:**  \r\nRules and workbooks still referencing the legacy table will stop processing fresh threat data after **July 31, 2025**. This workbook highlights those analytic rules needing an update using the **TI_MigrationFlag** column.\r\n\r\n- ✅ **No Update is Required** – Rule is already using the new schema / Rule do not use the TI Tables.\r\n- ⚠️ **Update the Query** – Rule is still using the legacy table.\r\n\r\n**📅 Key Dates to Remember:**\r\n- **Preview Started:** April 3, 2025  \r\n- **General Availability:** May 31, 2025  \r\n- <span style=\"color:red\"> **Cutoff (no more data to legacy table):** July 31, 2025 </span> unless you raise a support ticket for extention.\r\n- **Full Retirement:** May 31, 2026  \r\n\r\n**Action Required:**  \r\nReview the flagged rules in the **TI_MigrationFlag** column and update their queries to use the new tables before the cutoff date."
+      },
+      "name": "text - 2"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "items": [
+          {
+            "type": 9,
+            "content": {
+              "version": "KqlParameterItem/1.0",
+              "parameters": [
+                {
+                  "id": "fe3a12f8-7dcf-4cd3-93b8-e2cc504839eb",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "countRuleTemplates",
+                  "type": 1,
+                  "description": "used in a Tile later - hidden",
+                  "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":null,\"headers\":[],\"method\":\"GET\",\"path\":\"/subscriptions/{Subscription:id}/resourceGroups/{resourceGroup}/providers/Microsoft.OperationalInsights/workspaces/{Workspace:name}/providers/Microsoft.SecurityInsights/AlertRuleTemplates\",\"urlParams\":[{\"key\":\"api-version\",\"value\":\"2022-06-01-preview\"}],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$.value\",\"columns\":[{\"path\":\"name\",\"columnid\":\"name\"}]}}]}",
+                  "isHiddenWhenLocked": true,
+                  "timeContext": {
+                    "durationMs": 86400000
+                  },
+                  "queryType": 12
+                },
+                {
+                  "id": "6905ed27-7271-4d75-9402-adf21383f002",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "countActiveRules",
+                  "type": 1,
+                  "description": "used in a Tile later - hidden",
+                  "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":null,\"headers\":[],\"method\":\"GET\",\"path\":\"/subscriptions/{Subscription:id}/resourceGroups/{resourceGroup}/providers/Microsoft.OperationalInsights/workspaces/{Workspace:name}/providers/Microsoft.SecurityInsights/AlertRules\",\"urlParams\":[{\"key\":\"api-version\",\"value\":\"2022-06-01-preview\"}],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$.value\",\"columns\":[{\"path\":\"name\",\"columnid\":\"name\"}]}}]}",
+                  "isHiddenWhenLocked": true,
+                  "timeContext": {
+                    "durationMs": 86400000
+                  },
+                  "queryType": 12
+                },
+                {
+                  "id": "6036245c-70ea-448d-9643-8d1c99b97742",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "huntingQueries",
+                  "type": 1,
+                  "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":null,\"headers\":[],\"method\":\"GET\",\"path\":\"{Workspace}/SavedSearches\",\"urlParams\":[{\"key\":\"api-version\",\"value\":\"2021-12-01-preview\"}],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$.value..properties[?(@ == \\\"Hunting Queries\\\")]\",\"columns\":[]}}]}",
+                  "isHiddenWhenLocked": true,
+                  "timeContext": {
+                    "durationMs": 0
+                  },
+                  "timeContextFromParameter": "TimeRange",
+                  "queryType": 12
+                },
+                {
+                  "id": "3e824f1e-1817-448e-aacd-4abd357a2fad",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "activeRulesUpdatedDate",
+                  "type": 1,
+                  "description": "used in a Tile later - hidden",
+                  "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":null,\"headers\":[],\"method\":\"GET\",\"path\":\"/subscriptions/{Subscription:id}/resourceGroups/{resourceGroup}/providers/Microsoft.OperationalInsights/workspaces/{Workspace:name}/providers/Microsoft.SecurityInsights/AlertRules\",\"urlParams\":[{\"key\":\"api-version\",\"value\":\"2022-06-01-preview\"}],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$.value\",\"columns\":[{\"path\":\"properties.lastModifiedUtc\",\"columnid\":\"lastMod\"}]}}]}",
+                  "isHiddenWhenLocked": true,
+                  "timeContext": {
+                    "durationMs": 86400000
+                  },
+                  "queryType": 12
+                },
+                {
+                  "id": "91c045fb-d5a1-406c-93d3-dbc92014bec8",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "countbyCategory",
+                  "type": 1,
+                  "description": "used in a Tile later - hidden",
+                  "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":null,\"headers\":[],\"method\":\"GET\",\"path\":\"/subscriptions/{Subscription:id}/resourceGroups/{resourceGroup}/providers/Microsoft.OperationalInsights/workspaces/{Workspace:name}/providers/Microsoft.SecurityInsights/AlertRuleTemplates\",\"urlParams\":[{\"key\":\"api-version\",\"value\":\"2022-06-01-preview\"}],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$.value\",\"columns\":[{\"path\":\"kind\",\"columnid\":\"kind\"}]}}]}",
+                  "isHiddenWhenLocked": true,
+                  "timeContext": {
+                    "durationMs": 86400000
+                  },
+                  "queryType": 12
+                },
+                {
+                  "id": "b7fa83fb-adc9-4be0-b06e-9f61c41c649e",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "countByActiveCategory",
+                  "type": 1,
+                  "description": "used in a Tile later - hidden",
+                  "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":null,\"headers\":[],\"method\":\"GET\",\"path\":\"/subscriptions/{Subscription:id}/resourceGroups/{resourceGroup}/providers/Microsoft.OperationalInsights/workspaces/{Workspace:name}/providers/Microsoft.SecurityInsights/AlertRules\",\"urlParams\":[{\"key\":\"api-version\",\"value\":\"2022-06-01-preview\"}],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$.value\",\"columns\":[{\"path\":\"kind\",\"columnid\":\"kind\"}]}}]}",
+                  "isHiddenWhenLocked": true,
+                  "timeContext": {
+                    "durationMs": 86400000
+                  },
+                  "queryType": 12
+                }
+              ],
+              "style": "above",
+              "queryType": 12
+            },
+            "name": "parameters - 27"
+          },
+          {
+            "type": 12,
+            "content": {
+              "version": "NotebookGroup/1.0",
+              "groupType": "editable",
+              "title": "View All Rules",
+              "items": [
+                {
+                  "type": 3,
+                  "content": {
+                    "version": "KqlItem/1.0",
+                    "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":null,\"headers\":[{\"key\":\"\",\"value\":\"\"}],\"method\":\"GET\",\"path\":\"/subscriptions/{Subscription:id}/resourceGroups/{resourceGroup}/providers/Microsoft.OperationalInsights/workspaces/{Workspace:name}/providers/Microsoft.SecurityInsights/AlertRules\",\"urlParams\":[{\"key\":\"api-version\",\"value\":\"2025-03-01\"}],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$.value\",\"columns\":[{\"path\":\"properties.displayName\",\"columnid\":\"displayName\"},{\"path\":\"properties.query\",\"columnid\":\"TI_MigrationFlag\"},{\"path\":\"properties.enabled\",\"columnid\":\"enabled\"},{\"path\":\"properties.query\",\"columnid\":\"query\"},{\"path\":\"properties.severity\",\"columnid\":\"severity\"},{\"path\":\"properties.alertRuleTemplateName\",\"columnid\":\"alertRuleTemplateName\"},{\"path\":\"kind\",\"columnid\":\"kind\"},{\"path\":\"properties.templateVersion\",\"columnid\":\"Current Template Version\"}]}}]}",
+                    "size": 1,
+                    "title": "Active Rules via Rest API. count: {$rowCount}",
+                    "showExportToExcel": true,
+                    "queryType": 12,
+                    "gridSettings": {
+                      "formatters": [
+                        {
+                          "columnMatch": "TI_MigrationFlag",
+                          "formatter": 18,
+                          "formatOptions": {
+                            "thresholdsOptions": "icons",
+                            "thresholdsGrid": [
+                              {
+                                "operator": "regex",
+                                "thresholdValue": ".*ThreatIntelligenceIndicator.*",
+                                "representation": "2",
+                                "text": "Update the Query",
+                                "tooltipFormat": {
+                                  "tooltip": "Uses legacy TI table"
+                                }
+                              },
+                              {
+                                "operator": "Default",
+                                "thresholdValue": null,
+                                "representation": "Available",
+                                "text": "No Update is Required",
+                                "tooltipFormat": {
+                                  "tooltip": "Don't Uses legacy TI table"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "columnMatch": "enabled",
+                          "formatter": 18,
+                          "formatOptions": {
+                            "thresholdsOptions": "icons",
+                            "thresholdsGrid": [
+                              {
+                                "operator": "==",
+                                "thresholdValue": "true",
+                                "representation": "success",
+                                "text": "Enabled"
+                              },
+                              {
+                                "operator": "Default",
+                                "thresholdValue": null,
+                                "representation": "disabled",
+                                "text": "Disabled"
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "columnMatch": "query",
+                          "formatter": 7,
+                          "formatOptions": {
+                            "linkTarget": "CellDetails",
+                            "linkIsContextBlade": true
+                          }
+                        },
+                        {
+                          "columnMatch": "kind",
+                          "formatter": 18,
+                          "formatOptions": {
+                            "thresholdsOptions": "colors",
+                            "thresholdsGrid": [
+                              {
+                                "operator": "Default",
+                                "thresholdValue": null,
+                                "representation": "gray",
+                                "text": "{0}{1}"
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "columnMatch": "id",
+                          "formatter": 5
+                        },
+                        {
+                          "columnMatch": "status",
+                          "formatter": 18,
+                          "formatOptions": {
+                            "thresholdsOptions": "icons",
+                            "thresholdsGrid": [
+                              {
+                                "operator": "==",
+                                "thresholdValue": "false",
+                                "representation": "disabled",
+                                "text": "Disabled"
+                              },
+                              {
+                                "operator": "Default",
+                                "thresholdValue": null,
+                                "representation": "success",
+                                "text": "Enabled"
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "columnMatch": "queryText",
+                          "formatter": 7,
+                          "formatOptions": {
+                            "linkTarget": "CellDetails",
+                            "linkIsContextBlade": true
+                          }
+                        },
+                        {
+                          "columnMatch": "TI_Migration_Flag",
+                          "formatter": 18,
+                          "formatOptions": {
+                            "thresholdsOptions": "icons",
+                            "thresholdsGrid": [
+                              {
+                                "operator": "regex",
+                                "thresholdValue": ".*ThreatIntelligenceIndicator.*",
+                                "representation": "2",
+                                "text": "Update legacy Table in Query",
+                                "tooltipFormat": {
+                                  "tooltip": "Uses legacy TI table"
+                                }
+                              },
+                              {
+                                "operator": "Default",
+                                "thresholdValue": null,
+                                "representation": "Resolved",
+                                "text": "No Update Needed",
+                                "tooltipFormat": {
+                                  "tooltip": "Don't Uses legacy TI table"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "columnMatch": "tactics",
+                          "formatter": 7,
+                          "formatOptions": {
+                            "linkTarget": "CellDetails",
+                            "linkIsContextBlade": true
+                          }
+                        },
+                        {
+                          "columnMatch": "ThreatIntel_Used",
+                          "formatter": 18,
+                          "formatOptions": {
+                            "thresholdsOptions": "icons",
+                            "thresholdsGrid": [
+                              {
+                                "operator": "regex",
+                                "thresholdValue": ".*ThreatIntelligenceIndicator.*",
+                                "representation": "2",
+                                "text": "Migration Needed",
+                                "tooltipFormat": {
+                                  "tooltip": "Uses legacy table"
+                                }
+                              },
+                              {
+                                "operator": "Default",
+                                "thresholdValue": null,
+                                "representation": "success",
+                                "text": "No Action Needed",
+                                "tooltipFormat": {
+                                  "tooltip": "Clean"
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "columnMatch": "resourcegroup",
+                          "formatter": 14,
+                          "formatOptions": {
+                            "linkTarget": null,
+                            "showIcon": true
+                          }
+                        }
+                      ],
+                      "filter": true
+                    },
+                    "sortBy": []
+                  },
+                  "showPin": false,
+                  "name": "query - 21 - Rules in use "
+                },
+                {
+                  "type": 9,
+                  "content": {
+                    "version": "KqlParameterItem/1.0",
+                    "parameters": [
+                      {
+                        "id": "cd3e2ce5-4a24-477b-9c7c-ad73b62e552b",
+                        "version": "KqlParameterItem/1.0",
+                        "name": "showTemplateComparison",
+                        "label": "Compare above Analytics with latest Templates",
+                        "type": 10,
+                        "description": "Toggle this option to view a comparison between deployed analytic rules and the latest versions from Microsoft’s Content Hub. This helps identify rules that are out-of-date or still reference the legacy ThreatIntelligenceIndicator table.",
+                        "isRequired": true,
+                        "typeSettings": {
+                          "additionalResourceOptions": [],
+                          "showDefault": false
+                        },
+                        "jsonData": "[\r\n { \"value\": \"Yes\", \"label\": \"Yes\", \"selected\":true},\r\n { \"value\": \"No\", \"label\": \"No\" }\r\n]",
+                        "timeContext": {
+                          "durationMs": 86400000
+                        },
+                        "value": "No"
+                      },
+                      {
+                        "id": "cd3e2ce5-4a24-477b-9c7c-ad73b62e552b",
+                        "version": "KqlParameterItem/1.0",
+                        "name": "Info",
+                        "label": "Need more Info about comparison",
+                        "type": 10,
+                        "description": "Toggle this option to view a comparison between deployed analytic rules and the latest versions from Microsoft’s Content Hub. This helps identify rules that are out-of-date or still reference the legacy ThreatIntelligenceIndicator table.",
+                        "isRequired": true,
+                        "typeSettings": {
+                          "additionalResourceOptions": [],
+                          "showDefault": false
+                        },
+                        "jsonData": "[\r\n { \"value\": \"Yes\", \"label\": \"Yes\"},\r\n { \"value\": \"No\", \"label\": \"No\",\"selected\":true }\r\n]",
+                        "timeContext": {
+                          "durationMs": 86400000
+                        }
+                      }
+                    ],
+                    "style": "formVertical",
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces"
+                  },
+                  "customWidth": "100",
+                  "name": "parameters - 2",
+                  "styleSettings": {
+                    "showBorder": true
+                  }
+                },
+                {
+                  "type": 1,
+                  "content": {
+                    "json": "### 🔍 Why Comparision Matters\r\n\r\nIn Step 2, you're seeing three important panels:\r\n\r\n1. **Active Analytics in Customer Environment**  \r\n   This shows all the current analytic rules deployed in the customer's Sentinel workspace and checks if they still reference the legacy `ThreatIntelligenceIndicator` table. The `TI_MigrationFlag` column helps identify which rules need an update.\r\n\r\n2. **Analytics from Microsoft Content Hub Templates**  \r\n   This lists the latest analytics published by Microsoft, including version numbers.\r\n\r\n3. **Join of above two panels**  \r\n\r\n---\r\n\r\n#### 🔄 Why compare?\r\n\r\nComparing both views helps you:\r\n- Identify rules that may be **outdated** or **missing enhancements**.\r\n- See if an updated template version is available and consider aligning with it before migrating to the new ThreatIntel tables.\r\n\r\n---\r\n\r\n#### ⚠️ A Few Important Notes:\r\n- In rare cases, the **active analytic rule** might show a **higher version** than what’s available in the template — this is safe to ignore or investigate further.\r\n- Some rules might have a `null` version — this typically means:\r\n  - The rule was imported and version metadata wasn’t set.\r\n  - It’s a **custom use case** (not part of Microsoft's official content set).\r\n\r\nThis context ensures you're making informed decisions before applying any changes.\r\n"
+                  },
+                  "conditionalVisibility": {
+                    "parameterName": "Info",
+                    "comparison": "isEqualTo",
+                    "value": "Yes"
+                  },
+                  "name": "text - 4"
+                },
+                {
+                  "type": 3,
+                  "content": {
+                    "version": "KqlItem/1.0",
+                    "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":null,\"headers\":[],\"method\":\"GET\",\"path\":\"/subscriptions/{Subscription:id}/resourceGroups/{resourceGroup}/providers/Microsoft.OperationalInsights/workspaces/{Workspace:name}/providers/Microsoft.SecurityInsights/alertRuleTemplates\",\"urlParams\":[{\"key\":\"api-version\",\"value\":\"2025-03-01\"}],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$.value.*\",\"columns\":[{\"path\":\"properties.displayName\",\"columnid\":\"displayName\"},{\"path\":\"name\",\"columnid\":\"name\"},{\"path\":\"properties.version\",\"columnid\":\"Latest Template Version\"},{\"path\":\"properties.query\",\"columnid\":\"Query\"}]}}]}",
+                    "size": 1,
+                    "title": "Rule Templates via Rest API. count: {$rowCount}",
+                    "showExportToExcel": true,
+                    "queryType": 12,
+                    "gridSettings": {
+                      "formatters": [
+                        {
+                          "columnMatch": "requiredDataConnectors",
+                          "formatter": 7,
+                          "formatOptions": {
+                            "linkTarget": "CellDetails",
+                            "linkLabel": "Data Connectors",
+                            "linkIsContextBlade": true
+                          }
+                        },
+                        {
+                          "columnMatch": "queryText",
+                          "formatter": 7,
+                          "formatOptions": {
+                            "linkTarget": "CellDetails",
+                            "linkIsContextBlade": true
+                          },
+                          "numberFormat": {
+                            "unit": 0,
+                            "options": {
+                              "style": "decimal",
+                              "useGrouping": false
+                            }
+                          }
+                        },
+                        {
+                          "columnMatch": "resourcegroup",
+                          "formatter": 14,
+                          "formatOptions": {
+                            "linkTarget": null,
+                            "showIcon": true
+                          }
+                        },
+                        {
+                          "columnMatch": "id",
+                          "formatter": 5
+                        }
+                      ],
+                      "rowLimit": 500,
+                      "filter": true
+                    },
+                    "sortBy": []
+                  },
+                  "conditionalVisibility": {
+                    "parameterName": "showTemplateComparison",
+                    "comparison": "isEqualTo",
+                    "value": "Yes"
+                  },
+                  "showPin": false,
+                  "name": "query - 21 - Rules"
+                },
+                {
+                  "type": 3,
+                  "content": {
+                    "version": "KqlItem/1.0",
+                    "query": "{\"version\":\"Merge/1.0\",\"merges\":[{\"id\":\"6c524446-8775-4f7b-af1b-4867df9352b2\",\"mergeType\":\"leftouter\",\"leftTable\":\"query - 21 - Rules in use \",\"rightTable\":\"query - 21 - Rules\",\"leftColumn\":\"alertRuleTemplateName\",\"rightColumn\":\"name\"}],\"projectRename\":[{\"originalName\":\"[query - 21 - Rules in use ].displayName\",\"mergedName\":\"displayName\",\"fromId\":\"6c524446-8775-4f7b-af1b-4867df9352b2\"},{\"originalName\":\"[query - 21 - Rules in use ].TI_MigrationFlag\",\"mergedName\":\"TI_MigrationFlag\",\"fromId\":\"6c524446-8775-4f7b-af1b-4867df9352b2\"},{\"originalName\":\"[query - 21 - Rules in use ].enabled\",\"mergedName\":\"enabled\",\"fromId\":\"6c524446-8775-4f7b-af1b-4867df9352b2\"},{\"originalName\":\"[query - 21 - Rules in use ].severity\",\"mergedName\":\"severity\",\"fromId\":\"6c524446-8775-4f7b-af1b-4867df9352b2\"},{\"originalName\":\"[Added column]\",\"mergedName\":\"Check Version Conflict\",\"fromId\":null,\"isNewItem\":true,\"newItemData\":[{\"criteriaContext\":{\"leftOperand\":\"Current Template Version\",\"operator\":\"!=\",\"rightValType\":\"column\",\"rightVal\":\"Latest Template Version\",\"resultValType\":\"static\",\"resultVal\":\"Version of the Analytics does not match with the Template Analytics\"}},{\"criteriaContext\":{\"leftOperand\":\"Current Template Version\",\"operator\":\"==\",\"rightValType\":\"column\",\"rightVal\":\"Latest Template Version\",\"resultValType\":\"static\",\"resultVal\":\"No Version Conflict\"}},{\"criteriaContext\":{\"operator\":\"Default\",\"rightValType\":\"column\",\"resultValType\":\"column\"}}]},{\"originalName\":\"[query - 21 - Rules in use ].Current Template Version\",\"mergedName\":\"Current Template Version\",\"fromId\":\"6c524446-8775-4f7b-af1b-4867df9352b2\"},{\"originalName\":\"[query - 21 - Rules].Latest Template Version\",\"mergedName\":\"Latest Template Version\",\"fromId\":\"6c524446-8775-4f7b-af1b-4867df9352b2\"},{\"originalName\":\"[query - 21 - Rules in use ].query\",\"mergedName\":\"Current Query\",\"fromId\":\"6c524446-8775-4f7b-af1b-4867df9352b2\"},{\"originalName\":\"[query - 21 - Rules].Query\",\"mergedName\":\"Latest Template Query\",\"fromId\":\"6c524446-8775-4f7b-af1b-4867df9352b2\"},{\"originalName\":\"[query - 21 - Rules in use ].alertRuleTemplateName\"},{\"originalName\":\"[query - 21 - Rules in use ].kind\"},{\"originalName\":\"[query - 21 - Rules].displayName\"},{\"originalName\":\"[query - 21 - Rules].name\"}]}",
+                    "size": 0,
+                    "title": "Compare the deployed Rule to the original Rules from the Sentinel Github. Look for \"TI_MigrationFlag\" and available Template Version differs. Count: {$rowCount}",
+                    "showExportToExcel": true,
+                    "queryType": 7,
+                    "gridSettings": {
+                      "formatters": [
+                        {
+                          "columnMatch": "TI_MigrationFlag",
+                          "formatter": 18,
+                          "formatOptions": {
+                            "thresholdsOptions": "colors",
+                            "thresholdsGrid": [
+                              {
+                                "operator": "regex",
+                                "thresholdValue": ".*ThreatIntelligenceIndicator.*",
+                                "representation": "pink",
+                                "text": "Update the Query"
+                              },
+                              {
+                                "operator": "Default",
+                                "thresholdValue": null,
+                                "representation": "green",
+                                "text": "No Update is Required"
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "columnMatch": "Check Version Conflict",
+                          "formatter": 18,
+                          "formatOptions": {
+                            "thresholdsOptions": "colors",
+                            "thresholdsGrid": [
+                              {
+                                "operator": "startsWith",
+                                "thresholdValue": "No",
+                                "representation": "green",
+                                "text": "{0}{1}"
+                              },
+                              {
+                                "operator": "Default",
+                                "thresholdValue": null,
+                                "representation": "pink",
+                                "text": "{0}{1}"
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "columnMatch": "queryText",
+                          "formatter": 7,
+                          "formatOptions": {
+                            "linkTarget": "CellDetails",
+                            "linkIsContextBlade": true
+                          }
+                        },
+                        {
+                          "columnMatch": "queryText1",
+                          "formatter": 7,
+                          "formatOptions": {
+                            "linkTarget": "CellDetails",
+                            "linkIsContextBlade": true
+                          }
+                        },
+                        {
+                          "columnMatch": "kind",
+                          "formatter": 18,
+                          "formatOptions": {
+                            "thresholdsOptions": "colors",
+                            "thresholdsGrid": [
+                              {
+                                "operator": "Default",
+                                "thresholdValue": null,
+                                "representation": "gray",
+                                "text": "{0}{1}"
+                              }
+                            ]
+                          }
+                        }
+                      ],
+                      "rowLimit": 1000,
+                      "filter": true
+                    },
+                    "sortBy": []
+                  },
+                  "conditionalVisibility": {
+                    "parameterName": "showTemplateComparison",
+                    "comparison": "isEqualTo",
+                    "value": "Yes"
+                  },
+                  "showPin": false,
+                  "name": "query - 30 merge Rules"
+                }
+              ]
+            },
+            "name": "group -All Rules"
+          }
+        ]
+      },
+      "name": "group - rules"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "📌 Step 3 :Update the Analytics Using Legacy Table",
+        "expandable": true,
+        "expanded": true,
+        "items": [
+          {
+            "type": 1,
+            "content": {
+              "json": "Once you’ve identified the custom or out-of-the-box (OOTB) analytics that still reference the legacy `ThreatIntelligenceIndicator` table, follow your preferred method to update them:\r\n\r\n- ✅ **Edit directly** in the Sentinel UI (one by one)  \r\n- ✅ **Using Golden Image / Github ?** if your environment is managed through Github, make chages   in GitHub\r\n\r\n> Replace all references to `ThreatIntelligenceIndicator` with the appropriate new table:  \r\n> `ThreatIntelIndicators` or `ThreatIntelObjects` whatever is applicable. In most cases `ThreatIntelligenceIndicator` will be replaced by `ThreatIntelIndicators`\r\n\r\nAfter completing the updates, **return to Step 2** and re-run the panel.  \r\nYou should no longer see any analytic rules marked with **\"Update the Query\"**.\r\n\r\nThis confirms that your content is now aligned with the new threat intel schema."
+            },
+            "name": "text - 0"
+          }
+        ]
+      },
+      "name": "group - 5"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "📌 Optional Step: If Customer OR ISAs not yet ready to update all affected analytic rules.",
+        "expandable": true,
+        "expanded": true,
+        "items": [
+          {
+            "type": 1,
+            "content": {
+              "json": "### 🕒 Optional Step: Request Dual Ingestion Extension\r\n\r\nIf Customer OR ISAs **not yet ready** to update all affected analytic rules and workbooks, Microsoft allows you to enable **dual ingestion** — giving you up to **12 additional months** of parallel data flow to both legacy and new threat intel tables.\r\n\r\nThis can help buy time for:\r\n- Internal testing\r\n- Rule migration planning\r\n- Risk-based prioritization\r\n\r\n---\r\n\r\n#### 🔧 **How to Request an Extension**\r\n\r\n**➡️ From the Azure Portal:**\r\n1. Go to your **Sentinel workspace**.\r\n2. Click the **question mark (?)** icon in the top menu → select **Help + support**.\r\n\r\n![Support Request Screenshot](https://raw.githubusercontent.com/RishiCPS/SentinelImages/main/SentinelNewSupportRequest.png)\r\n\r\n3. Create a **new support request**.\r\n4. In the issue description, include the phrase:  \r\n   `Extend ingestion timeframe for ThreatIntelligenceIndicator table`.\r\n\r\n\r\n\r\n   \r\n\r\n**➡️ From the Microsoft Defender Portal:**\r\n- Open the **chatbot** and type:  \r\n  `Extend ingestion timeframe for ThreatIntelligenceIndicator table`\r\n\r\n---\r\n\r\n> 📝 **Note:**  \r\nWhile dual ingestion provides flexibility, it's a temporary solution.  \r\nYou should still plan for full migration before the final retirement on **31 May 2026** to avoid added ingestion costs and complexity."
+            },
+            "name": "text - 0"
+          }
+        ]
+      },
+      "name": "group - 4"
+    }
+  ],
+  "fallbackResourceIds": [
+    "/subscriptions/b4a10294-e9a4-47e3-8dab-94cc23dd16d7/resourcegroups/sentinel-prod-rg/providers/microsoft.operationalinsights/workspaces/bdosecure-law"
+  ],
+  "fromTemplateId": "sentinel-UserWorkbook",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}
